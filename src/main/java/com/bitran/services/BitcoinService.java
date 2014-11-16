@@ -39,7 +39,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class BitcoinService {
-    private final NetworkParameters netParams = TestNet2Params.get();
+    private final NetworkParameters netParams = MainNetParams.get();
     private ObjectMapper objectMapper = new ObjectMapper();
     @PostConstruct
     private void fetchTransactions(){
