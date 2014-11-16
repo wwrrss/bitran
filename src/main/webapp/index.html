@@ -1,0 +1,78 @@
+    <!DOCTYPE html>
+<html>
+    <head>
+        <title>Start Page</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css" rel="stylesheet">
+        <style>
+            .titulo{
+                text-align: center;
+            }
+            .tabla{
+                margin-left: auto;
+                margin-right: auto;
+                max-width: 600px;
+            }
+        </style>
+    </head>
+    <body ng-app="transactionsApp">
+        <div class="titulo">
+            <h1>Fetch last transactions in Bitcoin Network</h1>
+            <h2>Powered by <a href="https://bitcoinj.github.io/">Bitcoinj</a></h2>
+        </div>
+        <div class="titulo" ng-controller="controller" id="divController">
+            <table class="tabla table table-striped">
+                <thead>
+                    <tr>
+                        <td>TXID</td>
+                        <td>Amount</td>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr ng-repeat="t in transactions">
+                        <td>
+                            {{t.txid}}
+                        </td>
+                        <td>
+                            {{t.amount/100000000}}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+
+        </div>
+
+        <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+        <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.3.2/angular.js"></script>  
+        <script>
+            //socket
+            var wsUri = "ws://" + document.location.host + document.location.pathname +"transactionSocks";
+            var webSocket = new WebSocket(wsUri);
+            webSocket.onerror = function (evt) {
+                alert("error ");
+            };
+            webSocket.onopen = function (evt) {
+                
+            };
+            
+          //app angular
+          var transactionsApp = angular.module('transactionsApp',[]);
+            transactionsApp.controller('controller',function($scope){
+               $scope.transactions=[];
+               $scope.addT=function(data){
+                 console.log($scope.transactions.length);
+                 $scope.transactions.unshift(data);
+                 if($scope.transactions.length>9){
+                     $scope.transactions.splice(10,1);
+                 }
+               };
+            });
+            webSocket.onmessage = function(evt){
+                console.log(evt.data);
+                angular.element($('#divController')).scope().addT(jQuery.parseJSON(evt.data));
+                angular.element($('#divController')).scope().$apply();
+            };
+        </script>
+    </body>
+</html>
