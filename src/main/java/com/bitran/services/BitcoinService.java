@@ -40,52 +40,55 @@ import org.springframework.stereotype.Service;
  */
 @Component
 public class BitcoinService {
+
     private final NetworkParameters netParams = MainNetParams.get();
     private ObjectMapper objectMapper = new ObjectMapper();
-    
-    
+
     @PostConstruct
     @Async
-    private void fetchTransactions(){
-        try {
-          
-            BlockStore blockStore = new MemoryBlockStore(netParams);
-            BlockChain blockChain = new BlockChain(netParams, blockStore);
-            PeerGroup peerGroup = new PeerGroup(netParams,blockChain);
-            com.google.common.util.concurrent.Service service = peerGroup.startAsync();
-            peerGroup.addAddress(new PeerAddress(InetAddress.getLocalHost()));
-            Thread.sleep(10000);
-            Peer peer = peerGroup.getConnectedPeers().get(0);
-            PeerEventListener listener = new AbstractPeerEventListener(){
-              @Override
-              public void onTransaction(Peer p,Transaction t){
-                  try {
-                      com.bitran.models.Transaction tx = new com.bitran.models.Transaction();
-                      tx.setTxid(t.getHashAsString());
-                      Long total=0L;
-                      for(TransactionOutput to:t.getOutputs()){
-                          Coin value = to.getValue();
-                          total+=value.value;
-                      }
-                      tx.setAmount(total);
-                      String message = objectMapper.writeValueAsString(tx);
-                      System.out.println(message);
-                      TransactionSocket.sendTransaction(message);
-                  } catch (IOException ex) {
-                      
-                  }
-                  
-              }
-              
-            };
-            peer.addEventListener(listener);
-            
-            
-          
-        } catch (BlockStoreException | InterruptedException | UnknownHostException ex) {
-            
-        }
-        
-        
+    private void fetchTransactions() {
+        new Thread("bitcoinService"){
+            @Override
+            public void run() {
+                try {
+                    BlockStore blockStore = new MemoryBlockStore(netParams);
+                    BlockChain blockChain = new BlockChain(netParams, blockStore);
+                    PeerGroup peerGroup = new PeerGroup(netParams, blockChain);
+                    com.google.common.util.concurrent.Service service = peerGroup.startAsync();
+                    peerGroup.addAddress(new PeerAddress(InetAddress.getLocalHost()));
+                    Thread.sleep(10000);
+                    Peer peer = peerGroup.getConnectedPeers().get(0);
+                    PeerEventListener listener = new AbstractPeerEventListener() {
+                        @Override
+                        public void onTransaction(Peer p, Transaction t) {
+                            try {
+                                com.bitran.models.Transaction tx = new com.bitran.models.Transaction();
+                                tx.setTxid(t.getHashAsString());
+                                Long total = 0L;
+                                for (TransactionOutput to : t.getOutputs()) {
+                                    Coin value = to.getValue();
+                                    total += value.value;
+                                }
+                                tx.setAmount(total);
+                                String message = objectMapper.writeValueAsString(tx);
+                                System.out.println(message);
+                                TransactionSocket.sendTransaction(message);
+                            } catch (IOException ex) {
+                                
+                            }
+
+                        }
+                        
+                    };
+                    peer.addEventListener(listener);
+                    service.awaitTerminated();
+                } catch (BlockStoreException | UnknownHostException | InterruptedException ex) {
+                    Logger.getLogger(BitcoinService.class.getName()).log(Level.SEVERE, null, ex);
+                }
+
+            }
+
+        }.start();
+
     }
 }
