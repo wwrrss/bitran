@@ -26,12 +26,13 @@ import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionOutput;
 
 import org.bitcoinj.params.MainNetParams;
-import org.bitcoinj.params.TestNet2Params;
-import org.bitcoinj.params.TestNet3Params;
 import org.bitcoinj.store.BlockStore;
 import org.bitcoinj.store.BlockStoreException;
 import org.bitcoinj.store.MemoryBlockStore;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 /**
  *
@@ -41,16 +42,19 @@ import org.springframework.stereotype.Component;
 public class BitcoinService {
     private final NetworkParameters netParams = MainNetParams.get();
     private ObjectMapper objectMapper = new ObjectMapper();
+    
+    
     @PostConstruct
+    @Async
     private void fetchTransactions(){
         try {
+          
             BlockStore blockStore = new MemoryBlockStore(netParams);
             BlockChain blockChain = new BlockChain(netParams, blockStore);
             PeerGroup peerGroup = new PeerGroup(netParams,blockChain);
-            peerGroup.startAsync();
+            com.google.common.util.concurrent.Service service = peerGroup.startAsync();
             peerGroup.addAddress(new PeerAddress(InetAddress.getLocalHost()));
             Thread.sleep(10000);
-            
             Peer peer = peerGroup.getConnectedPeers().get(0);
             PeerEventListener listener = new AbstractPeerEventListener(){
               @Override
@@ -65,20 +69,21 @@ public class BitcoinService {
                       }
                       tx.setAmount(total);
                       String message = objectMapper.writeValueAsString(tx);
-                      
+                      System.out.println(message);
                       TransactionSocket.sendTransaction(message);
                   } catch (IOException ex) {
-                      Logger.getLogger(BitcoinService.class.getName()).log(Level.SEVERE, null, ex);
+                      
                   }
                   
               }
               
             };
             peer.addEventListener(listener);
-        } catch (BlockStoreException | InterruptedException ex) {
-            Logger.getLogger(BitcoinService.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (UnknownHostException ex) {
-            Logger.getLogger(BitcoinService.class.getName()).log(Level.SEVERE, null, ex);
+            
+            
+          
+        } catch (BlockStoreException | InterruptedException | UnknownHostException ex) {
+            
         }
         
         
