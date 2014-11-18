@@ -8,11 +8,13 @@ package com.bitran.services;
 import com.bitran.sockets.TransactionSocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.lang.annotation.Retention;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.PostConstruct;
+import javax.annotation.Resource;
 import org.bitcoinj.core.AbstractPeerEventListener;
 import org.bitcoinj.core.BlockChain;
 import org.bitcoinj.core.Coin;
@@ -29,25 +31,22 @@ import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.store.BlockStore;
 import org.bitcoinj.store.BlockStoreException;
 import org.bitcoinj.store.MemoryBlockStore;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 /**
  *
  * @author Willian
  */
-@Component
+@Service
 public class BitcoinService {
 
     private final NetworkParameters netParams = MainNetParams.get();
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @PostConstruct
-    @Async
     private void fetchTransactions() {
-        new Thread("bitcoinService"){
+        System.out.println("post");
+        Thread t = new Thread("tListener") {
             @Override
             public void run() {
                 try {
@@ -74,21 +73,25 @@ public class BitcoinService {
                                 System.out.println(message);
                                 TransactionSocket.sendTransaction(message);
                             } catch (IOException ex) {
-                                
+
                             }
 
                         }
-                        
+
                     };
                     peer.addEventListener(listener);
-                    service.awaitTerminated();
+                    System.out.println("fin");
+                    while(true){
+                        
+                    }
+
                 } catch (BlockStoreException | UnknownHostException | InterruptedException ex) {
                     Logger.getLogger(BitcoinService.class.getName()).log(Level.SEVERE, null, ex);
                 }
 
             }
-
-        }.start();
-
+        };
+        t.setDaemon(true);
+        t.start();
     }
 }
