@@ -7,14 +7,15 @@ package com.bitran.services;
 
 import com.bitran.sockets.TransactionSocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.util.concurrent.ListenableFuture;
 import java.io.IOException;
-import java.lang.annotation.Retention;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.PostConstruct;
-import javax.annotation.Resource;
 import org.bitcoinj.core.AbstractPeerEventListener;
 import org.bitcoinj.core.BlockChain;
 import org.bitcoinj.core.Coin;
@@ -31,6 +32,7 @@ import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.store.BlockStore;
 import org.bitcoinj.store.BlockStoreException;
 import org.bitcoinj.store.MemoryBlockStore;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
@@ -39,59 +41,77 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class BitcoinService {
-
+    
     private final NetworkParameters netParams = MainNetParams.get();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private PeerGroup peerGroup;
+    private Peer peer;
 
     @PostConstruct
+    public void ejecutar() {
+        
+        fetchTransactions();
+        
+    }
+
     private void fetchTransactions() {
-        System.out.println("post");
-        Thread t = new Thread("tListener") {
-            @Override
-            public void run() {
-                try {
-                    BlockStore blockStore = new MemoryBlockStore(netParams);
-                    BlockChain blockChain = new BlockChain(netParams, blockStore);
-                    PeerGroup peerGroup = new PeerGroup(netParams, blockChain);
-                    com.google.common.util.concurrent.Service service = peerGroup.startAsync();
-                    peerGroup.addAddress(new PeerAddress(InetAddress.getLocalHost()));
-                    Thread.sleep(10000);
-                    Peer peer = peerGroup.getConnectedPeers().get(0);
-                    PeerEventListener listener = new AbstractPeerEventListener() {
-                        @Override
-                        public void onTransaction(Peer p, Transaction t) {
-                            try {
-                                com.bitran.models.Transaction tx = new com.bitran.models.Transaction();
-                                tx.setTxid(t.getHashAsString());
-                                Long total = 0L;
-                                for (TransactionOutput to : t.getOutputs()) {
-                                    Coin value = to.getValue();
-                                    total += value.value;
-                                }
-                                tx.setAmount(total);
-                                String message = objectMapper.writeValueAsString(tx);
-                                System.out.println(message);
-                                TransactionSocket.sendTransaction(message);
-                            } catch (IOException ex) {
+        try {
+            System.out.println("post");
 
-                            }
-
-                        }
-
-                    };
-                    peer.addEventListener(listener);
-                    System.out.println("fin");
-                    while(true){
-                        
-                    }
-
-                } catch (BlockStoreException | UnknownHostException | InterruptedException ex) {
-                    Logger.getLogger(BitcoinService.class.getName()).log(Level.SEVERE, null, ex);
+            BlockStore blockStore = new MemoryBlockStore(netParams);
+            BlockChain blockChain = new BlockChain(netParams, blockStore);
+            peerGroup = new PeerGroup(netParams, blockChain);
+            com.google.common.util.concurrent.Service service = peerGroup.startAsync();
+            peerGroup.addAddress(new PeerAddress(InetAddress.getLocalHost()));
+            Thread.sleep(10000);
+            peer = peerGroup.getConnectedPeers().get(0);
+            PeerEventListener listener = new AbstractPeerEventListener() {
+                @Override
+                public void onTransaction(Peer p, Transaction t) {
+                    broadCastTransaction(t);
                 }
 
-            }
-        };
-        t.setDaemon(true);
-        t.start();
+            };
+
+            peer.addEventListener(listener);
+            Timer timer = new Timer();
+            TimerTask timerTask = new TimerTask() {
+
+                @Override
+                public void run() {
+                    System.out.println("is Running?");
+                    System.out.println(BitcoinService.this.peerGroup.isRunning());
+                    
+                    
+                    
+                }
+            };
+            timer.schedule(timerTask, 10000, 30000);
+
+            System.out.println("fin");
+        } catch (BlockStoreException | UnknownHostException | InterruptedException ex) {
+            Logger.getLogger(BitcoinService.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
     }
+
+    @Async
+    public void broadCastTransaction(Transaction t) {
+        try {
+            com.bitran.models.Transaction tx = new com.bitran.models.Transaction();
+            tx.setTxid(t.getHashAsString());
+            Long total = 0L;
+            for (TransactionOutput to : t.getOutputs()) {
+                Coin value = to.getValue();
+                total += value.value;
+            }
+            tx.setAmount(total);
+            String message = objectMapper.writeValueAsString(tx);
+            System.out.println(message);
+            TransactionSocket.sendTransaction(message);
+        } catch (IOException ex) {
+
+        }
+    }
+
 }
