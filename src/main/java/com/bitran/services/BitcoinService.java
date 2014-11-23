@@ -41,17 +41,18 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class BitcoinService {
-    
+
     private final NetworkParameters netParams = MainNetParams.get();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private PeerGroup peerGroup;
     private Peer peer;
+    private PeerEventListener listener;
 
     @PostConstruct
     public void ejecutar() {
-        
+
         fetchTransactions();
-        
+
     }
 
     private void fetchTransactions() {
@@ -61,35 +62,31 @@ public class BitcoinService {
             BlockStore blockStore = new MemoryBlockStore(netParams);
             BlockChain blockChain = new BlockChain(netParams, blockStore);
             peerGroup = new PeerGroup(netParams, blockChain);
+            listener = new AbstractPeerEventListener() {
+                @Override
+                public void onTransaction(Peer p, Transaction t) {
+                    
+                    broadCastTransaction(t);
+                    p = null;
+                    t = null;
+                }
+
+            };
+            PeerEventListener listenConnected = new AbstractPeerEventListener() {
+                @Override
+                public void onPeerConnected(Peer p, int peerCount) {
+
+                    System.out.println("new peer, peers: " + peerCount);
+                    p.addEventListener(listener);
+                }
+            };
+            peerGroup.addEventListener(listenConnected);
             com.google.common.util.concurrent.Service service = peerGroup.startAsync();
             peerGroup.addAddress(new PeerAddress(InetAddress.getLocalHost()));
             Thread.sleep(10000);
-            peer = peerGroup.getConnectedPeers().get(0);
-            PeerEventListener listener = new AbstractPeerEventListener() {
-                @Override
-                public void onTransaction(Peer p, Transaction t) {
-                    broadCastTransaction(t);
-                }
-
-            };
-
-            peer.addEventListener(listener);
-            Timer timer = new Timer();
-            TimerTask timerTask = new TimerTask() {
-
-                @Override
-                public void run() {
-                    System.out.println("is Running?");
-                    System.out.println(BitcoinService.this.peerGroup.isRunning());
-                    
-                    
-                    
-                }
-            };
-            timer.schedule(timerTask, 10000, 30000);
 
             System.out.println("fin");
-        } catch (BlockStoreException | UnknownHostException | InterruptedException ex) {
+        } catch (BlockStoreException | InterruptedException | UnknownHostException ex) {
             Logger.getLogger(BitcoinService.class.getName()).log(Level.SEVERE, null, ex);
         }
 
@@ -107,8 +104,13 @@ public class BitcoinService {
             }
             tx.setAmount(total);
             String message = objectMapper.writeValueAsString(tx);
-            System.out.println(message);
+
             TransactionSocket.sendTransaction(message);
+            t = null;
+            total = null;
+            tx = null;
+            message = null;
+
         } catch (IOException ex) {
 
         }
